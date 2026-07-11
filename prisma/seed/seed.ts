@@ -2,19 +2,23 @@ import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '../../src/generated/prisma/client';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb({
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 3307),
-    user: process.env.DB_USER ?? 'root',
-    password: process.env.DB_PASSWORD ?? '',
-    database: process.env.DB_NAME ?? 'inventario_it',
+  adapter: new PrismaPg({
+    connectionString:
+      process.env.DATABASE_URL ??
+      'postgresql://ivanorpineda@localhost:5432/inventario_it',
   }),
 });
 
 async function seedUsersAndRoles() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const adminUsername = process.env.SEED_ADMIN_USERNAME ?? 'admin';
+  const adminName = process.env.SEED_ADMIN_NAME ?? 'Administrador General';
+
   const adminRole = await prisma.role.upsert({
     where: { code: 'ADMIN' },
     update: {
@@ -45,50 +49,65 @@ async function seedUsersAndRoles() {
     },
   });
 
-  const adminPasswordHash = await bcrypt.hash('Admin123*', 10);
-  const userPasswordHash = await bcrypt.hash('User123*', 10);
+  if (!adminEmail || !adminPassword) {
+    if (isProduction) {
+      throw new Error(
+        'SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD son obligatorios en produccion',
+      );
+    }
 
-  await prisma.user.upsert({
-    where: { email: 'admin@impulso.local' },
-    update: {
-      username: 'admin',
-      fullName: 'Administrador General',
-      passwordHash: adminPasswordHash,
-      roleId: adminRole.id,
-      status: 'ACTIVE',
-      deletedAt: null,
-    },
-    create: {
-      roleId: adminRole.id,
-      email: 'admin@impulso.local',
-      username: 'admin',
-      passwordHash: adminPasswordHash,
-      fullName: 'Administrador General',
-      status: 'ACTIVE',
-    },
-  });
+    console.log(
+      'Seed aviso: no se creo admin porque faltan SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD',
+    );
+  } else {
+    const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
 
-  await prisma.user.upsert({
-    where: { email: 'user@impulso.local' },
-    update: {
-      username: 'usuario1',
-      fullName: 'Usuario Operativo',
-      passwordHash: userPasswordHash,
-      roleId: userRole.id,
-      status: 'ACTIVE',
-      deletedAt: null,
-    },
-    create: {
-      roleId: userRole.id,
-      email: 'user@impulso.local',
-      username: 'usuario1',
-      passwordHash: userPasswordHash,
-      fullName: 'Usuario Operativo',
-      status: 'ACTIVE',
-    },
-  });
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: {
+        username: adminUsername,
+        fullName: adminName,
+        passwordHash: adminPasswordHash,
+        roleId: adminRole.id,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+      create: {
+        roleId: adminRole.id,
+        email: adminEmail,
+        username: adminUsername,
+        passwordHash: adminPasswordHash,
+        fullName: adminName,
+        status: 'ACTIVE',
+      },
+    });
+  }
 
-  console.log('Seed OK: ADMIN y USER creados/actualizados');
+  if (!isProduction) {
+    const userPasswordHash = await bcrypt.hash('User123*', 10);
+
+    await prisma.user.upsert({
+      where: { email: 'user@impulso.local' },
+      update: {
+        username: 'usuario1',
+        fullName: 'Usuario Operativo',
+        passwordHash: userPasswordHash,
+        roleId: userRole.id,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+      create: {
+        roleId: userRole.id,
+        email: 'user@impulso.local',
+        username: 'usuario1',
+        passwordHash: userPasswordHash,
+        fullName: 'Usuario Operativo',
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  console.log('Seed OK: roles y usuarios base creados/actualizados');
 }
 
 function runSeed(file: string) {

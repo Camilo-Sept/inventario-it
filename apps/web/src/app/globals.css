@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #f8fafc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+button {
+  cursor: pointer;
+}
+
+.field-control {
+  height: 2.75rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: #020617;
+  padding: 0 0.75rem;
+  color: white;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.field-control:focus {
+  border-color: #67e8f9;
+  box-shadow: 0 0 0 4px rgb(34 211 238 / 0.3);
+}

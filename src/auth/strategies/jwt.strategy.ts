@@ -2,10 +2,11 @@ import 'dotenv/config';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly usersService: UsersService) {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
@@ -25,11 +26,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     username: string;
     role: string;
   }) {
+    const user = await this.usersService.findActiveById(payload.sub);
+
+    if (!user) {
+      throw new UnauthorizedException('Sesion invalida o expirada');
+    }
+
     return {
-      userId: payload.sub,
-      email: payload.email,
-      username: payload.username,
-      role: payload.role,
+      userId: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.code,
     };
   }
 }

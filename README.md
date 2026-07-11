@@ -24,8 +24,7 @@ La meta es reemplazar AppSheet por una solución profesional con backend robusto
 - **TypeScript**
 - **NestJS**
 - **Prisma 7**
-- **MariaDB**
-- **Docker**
+- **PostgreSQL**
 - **JWT Authentication**
 - **ExcelJS**
 
@@ -127,9 +126,7 @@ Node.js 22+
 
 pnpm
 
-Docker Desktop
-
-MariaDB
+PostgreSQL 15+
 
 Prisma 7
 
@@ -138,25 +135,23 @@ Variables de entorno
 Crea un archivo .env basado en .env.example.
 
 .env.example
-DATABASE_URL="mysql://root:root123@localhost:3307/inventario_it"
-
-DB_HOST=localhost
-DB_PORT=3307
-DB_USER=root
-DB_PASSWORD=root123
-DB_NAME=inventario_it
+DATABASE_URL="postgresql://ivanorpineda@localhost:5432/inventario_it"
 
 JWT_SECRET="change_this_in_production"
 TZ=America/Ciudad_Juarez
+PORT=3011
+FRONTEND_ORIGIN="http://localhost:3002"
+
+SEED_ADMIN_EMAIL="admin@impulso.local"
+SEED_ADMIN_USERNAME="admin"
+SEED_ADMIN_PASSWORD="change_this_local_password"
+SEED_ADMIN_NAME="Administrador General"
 Instalación
 pnpm install
 Generar cliente Prisma
 pnpm run prisma:generate
-Migraciones
-En desarrollo
-pnpm run prisma:migrate:dev
-En despliegue / servidor
-pnpm run prisma:migrate:deploy
+Sincronizar base local
+pnpm exec prisma db push
 Seeds
 
 Este proyecto ya incluye seed maestro.
@@ -268,8 +263,7 @@ pnpm run start:dev
 pnpm run build
 pnpm run start:prod
 pnpm run prisma:generate
-pnpm run prisma:migrate:dev
-pnpm run prisma:migrate:deploy
+pnpm run prisma:db:push
 pnpm run prisma:studio
 pnpm run seed
 Notas de desarrollo

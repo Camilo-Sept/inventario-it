@@ -40,6 +40,19 @@ export class UsersService {
     });
   }
 
+  async findActiveById(userId: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        deletedAt: null,
+        status: 'ACTIVE',
+      },
+      include: {
+        role: true,
+      },
+    });
+  }
+
   async create(createUserDto: CreateUserDto) {
     const role = await this.prisma.role.findFirst({
       where: {

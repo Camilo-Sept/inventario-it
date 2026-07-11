@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
 }
 
 model Role {
@@ -56,8 +56,8 @@ model AuditLog {
   entityName  String
   entityId    String
   action      String
-  oldValues   String?  @db.LongText
-  newValues   String?  @db.LongText
+  oldValues   String?  @db.Text
+  newValues   String?  @db.Text
   ipAddress   String?
   createdAt   DateTime @default(now())
 
@@ -378,4 +378,3 @@ model AppSequence {
 
   @@map("app_sequences")
 }
-

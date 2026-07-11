@@ -1,14 +1,12 @@
 import 'dotenv/config';
 import { PrismaClient } from '../../src/generated/prisma/client';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb({
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 3307),
-    user: process.env.DB_USER ?? 'root',
-    password: process.env.DB_PASSWORD ?? '',
-    database: process.env.DB_NAME ?? 'inventario_it',
+  adapter: new PrismaPg({
+    connectionString:
+      process.env.DATABASE_URL ??
+      'postgresql://ivanorpineda@localhost:5432/inventario_it',
   }),
 });
 

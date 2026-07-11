@@ -1,14 +1,12 @@
 import 'dotenv/config';
 import { PrismaClient } from '../../src/generated/prisma/client';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb({
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 3307),
-    user: process.env.DB_USER ?? 'root',
-    password: process.env.DB_PASSWORD ?? '',
-    database: process.env.DB_NAME ?? 'inventario_it',
+  adapter: new PrismaPg({
+    connectionString:
+      process.env.DATABASE_URL ??
+      'postgresql://ivanorpineda@localhost:5432/inventario_it',
   }),
 });
 
@@ -24,6 +22,7 @@ const branches = [
 
 const warehousesByBranch: Record<string, string[]> = {
   JUAREZ: [
+    'ALMACEN IT',
     'JRZ 1',
     'JRZ 2',
     'JRZ 3',
@@ -72,22 +71,36 @@ async function main() {
     const warehouses = warehousesByBranch[branchData.code] ?? [];
 
     for (const warehouseName of warehouses) {
-      const warehouseCode = `${branchData.code}_${toCode(warehouseName)}`;
+      const warehouseCode =
+        warehouseName === 'ALMACEN IT'
+          ? 'ALMACEN_IT'
+          : `${branchData.code}_${toCode(warehouseName)}`;
 
-      await prisma.warehouse.upsert({
-        where: { code: warehouseCode },
-        update: {
-          name: warehouseName,
+      const existingWarehouse = await prisma.warehouse.findFirst({
+        where: {
           branchId: branch.id,
-          isActive: true,
-        },
-        create: {
-          branchId: branch.id,
-          code: warehouseCode,
           name: warehouseName,
-          isActive: true,
         },
       });
+
+      if (existingWarehouse) {
+        await prisma.warehouse.update({
+          where: { id: existingWarehouse.id },
+          data: {
+            code: warehouseCode,
+            isActive: true,
+          },
+        });
+      } else {
+        await prisma.warehouse.create({
+          data: {
+            branchId: branch.id,
+            code: warehouseCode,
+            name: warehouseName,
+            isActive: true,
+          },
+        });
+      }
     }
   }
 

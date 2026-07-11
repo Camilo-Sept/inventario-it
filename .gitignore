@@ -51,6 +51,7 @@ Thumbs.db
 # temp directory
 .temp
 .tmp
+.local-backups/
 
 # Runtime data
 pids
