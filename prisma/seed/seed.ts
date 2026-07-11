@@ -1,8 +1,8 @@
 import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
 import { execSync } from 'node:child_process';
 import { PrismaClient } from '../../src/generated/prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -18,6 +18,11 @@ async function seedUsersAndRoles() {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   const adminUsername = process.env.SEED_ADMIN_USERNAME ?? 'admin';
   const adminName = process.env.SEED_ADMIN_NAME ?? 'Administrador General';
+
+  const userEmail = process.env.SEED_USER_EMAIL;
+  const userPassword = process.env.SEED_USER_PASSWORD;
+  const userUsername = process.env.SEED_USER_USERNAME;
+  const userName = process.env.SEED_USER_NAME;
 
   const adminRole = await prisma.role.upsert({
     where: { code: 'ADMIN' },
@@ -52,15 +57,15 @@ async function seedUsersAndRoles() {
   if (!adminEmail || !adminPassword) {
     if (isProduction) {
       throw new Error(
-        'SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD son obligatorios en produccion',
+        'SEED_ADMIN_EMAIL y SEED_ADMIN_PASSWORD son obligatorios en producción',
       );
     }
 
     console.log(
-      'Seed aviso: no se creo admin porque faltan SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD',
+      'Seed aviso: no se creó admin porque faltan SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD',
     );
   } else {
-    const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+    const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
 
     await prisma.user.upsert({
       where: { email: adminEmail },
@@ -83,14 +88,20 @@ async function seedUsersAndRoles() {
     });
   }
 
-  if (!isProduction) {
-    const userPasswordHash = await bcrypt.hash('User123*', 10);
+  const standardUserIsConfigured =
+    Boolean(userEmail) &&
+    Boolean(userPassword) &&
+    Boolean(userUsername) &&
+    Boolean(userName);
+
+  if (standardUserIsConfigured) {
+    const userPasswordHash = await bcrypt.hash(userPassword!, 12);
 
     await prisma.user.upsert({
-      where: { email: 'user@impulso.local' },
+      where: { email: userEmail! },
       update: {
-        username: 'usuario1',
-        fullName: 'Usuario Operativo',
+        username: userUsername!,
+        fullName: userName!,
         passwordHash: userPasswordHash,
         roleId: userRole.id,
         status: 'ACTIVE',
@@ -98,16 +109,20 @@ async function seedUsersAndRoles() {
       },
       create: {
         roleId: userRole.id,
-        email: 'user@impulso.local',
-        username: 'usuario1',
+        email: userEmail!,
+        username: userUsername!,
         passwordHash: userPasswordHash,
-        fullName: 'Usuario Operativo',
+        fullName: userName!,
         status: 'ACTIVE',
       },
     });
+  } else {
+    console.log(
+      'Seed aviso: usuario operativo omitido; configura todas las variables SEED_USER_* para crearlo',
+    );
   }
 
-  console.log('Seed OK: roles y usuarios base creados/actualizados');
+  console.log('Seed OK: roles y usuarios configurados creados/actualizados');
 }
 
 function runSeed(file: string) {
