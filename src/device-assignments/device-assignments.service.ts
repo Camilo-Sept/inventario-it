@@ -42,9 +42,10 @@ const deviceAssignmentDetailInclude = {
   department: true,
 } as const;
 
-type DeviceAssignmentWithRelations = Prisma.DeviceAssignmentGetPayload<{
-  include: typeof deviceAssignmentDetailInclude;
-}>;
+type DeviceAssignmentWithRelations =
+  Prisma.DeviceAssignmentGetPayload<{
+    include: typeof deviceAssignmentDetailInclude;
+  }>;
 
 @Injectable()
 export class DeviceAssignmentsService {
@@ -58,7 +59,9 @@ export class DeviceAssignmentsService {
     return normalized.length ? normalized : null;
   }
 
-  private mapAssignmentResponse(assignment: DeviceAssignmentWithRelations) {
+  private mapAssignmentResponse(
+    assignment: DeviceAssignmentWithRelations,
+  ) {
     return {
       id: assignment.id,
       status: assignment.status,
@@ -106,18 +109,20 @@ export class DeviceAssignmentsService {
     const where: Prisma.DeviceAssignmentWhereInput = {};
 
     if (search && search.trim()) {
-      const searchValue = search.trim().toUpperCase();
+      const searchValue = search.trim();
 
       where.OR = [
         {
           assignedToName: {
             contains: searchValue,
+            mode: 'insensitive',
           },
         },
         {
           device: {
             deviceCode: {
               contains: searchValue,
+              mode: 'insensitive',
             },
           },
         },
@@ -125,6 +130,7 @@ export class DeviceAssignmentsService {
           device: {
             serialNumber: {
               contains: searchValue,
+              mode: 'insensitive',
             },
           },
         },
@@ -132,6 +138,7 @@ export class DeviceAssignmentsService {
           device: {
             model: {
               contains: searchValue,
+              mode: 'insensitive',
             },
           },
         },
@@ -192,6 +199,12 @@ export class DeviceAssignmentsService {
         throw new NotFoundException('El dispositivo indicado no existe');
       }
 
+      if (device.status === 'RETIRED') {
+        throw new ConflictException(
+          'No se puede asignar un dispositivo dado de baja',
+        );
+      }
+
       const activeAssignment = await tx.deviceAssignment.findFirst({
         where: {
           deviceId: createDeviceAssignmentDto.deviceId,
@@ -234,31 +247,60 @@ export class DeviceAssignmentsService {
         }
       }
 
+      const assignedToName = this.normalizeText(
+        createDeviceAssignmentDto.assignedToName,
+      );
+
+      if (!assignedToName) {
+        throw new ConflictException(
+          'El nombre del responsable es obligatorio',
+        );
+      }
+
+      await tx.device.update({
+        where: {
+          id: device.id,
+        },
+        data: {
+          warehouseId: warehouse.id,
+          currentResponsibleName: assignedToName,
+          departmentId:
+            createDeviceAssignmentDto.departmentId ?? null,
+          status: 'ASSIGNED',
+          updatedByUserId: actorUserId,
+        },
+      });
+
       const assignment = await tx.deviceAssignment.create({
         data: {
-          deviceId: createDeviceAssignmentDto.deviceId,
-          assignedToName:
-            this.normalizeText(createDeviceAssignmentDto.assignedToName) ?? '',
+          deviceId: device.id,
+          assignedToName,
           assignedByUserId: actorUserId,
-          warehouseId: createDeviceAssignmentDto.warehouseId,
-          departmentId: createDeviceAssignmentDto.departmentId ?? null,
+          warehouseId: warehouse.id,
+          departmentId:
+            createDeviceAssignmentDto.departmentId ?? null,
           assignedAt: new Date(createDeviceAssignmentDto.assignedAt),
-          status:
-            this.normalizeText(createDeviceAssignmentDto.status) ?? 'ACTIVE',
+          status: 'ACTIVE',
           deliveryNotes:
-            this.normalizeText(createDeviceAssignmentDto.deliveryNotes) ?? null,
+            this.normalizeText(
+              createDeviceAssignmentDto.deliveryNotes,
+            ) ?? null,
           devicePhotoPath:
-            this.normalizeText(createDeviceAssignmentDto.devicePhotoPath) ??
-            null,
+            this.normalizeText(
+              createDeviceAssignmentDto.devicePhotoPath,
+            ) ?? null,
           deliveryDocumentPath:
             this.normalizeText(
               createDeviceAssignmentDto.deliveryDocumentPath,
             ) ?? null,
           policyDocumentPath:
-            this.normalizeText(createDeviceAssignmentDto.policyDocumentPath) ??
-            null,
+            this.normalizeText(
+              createDeviceAssignmentDto.policyDocumentPath,
+            ) ?? null,
           signaturePath:
-            this.normalizeText(createDeviceAssignmentDto.signaturePath) ?? null,
+            this.normalizeText(
+              createDeviceAssignmentDto.signaturePath,
+            ) ?? null,
         },
         include: deviceAssignmentDetailInclude,
       });
@@ -277,11 +319,12 @@ export class DeviceAssignmentsService {
     actorUserId: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const existingAssignment = await tx.deviceAssignment.findFirst({
-        where: {
-          id,
-        },
-      });
+      const existingAssignment =
+        await tx.deviceAssignment.findFirst({
+          where: {
+            id,
+          },
+        });
 
       if (!existingAssignment) {
         throw new NotFoundException('La asignación no existe');
@@ -291,7 +334,9 @@ export class DeviceAssignmentsService {
         existingAssignment.status !== 'ACTIVE' ||
         existingAssignment.returnedAt !== null
       ) {
-        throw new ConflictException('La asignación ya fue retornada o no está activa');
+        throw new ConflictException(
+          'La asignación ya fue retornada o no está activa',
+        );
       }
 
       const almacenIt = await tx.warehouse.findFirst({
@@ -307,14 +352,16 @@ export class DeviceAssignmentsService {
         );
       }
 
-      const returnNotes = this.normalizeText(returnDeviceAssignmentDto.returnNotes);
+      const returnNotes = this.normalizeText(
+        returnDeviceAssignmentDto.returnNotes,
+      );
       const previousNotes = existingAssignment.deliveryNotes ?? null;
 
       const mergedNotes =
         returnNotes && previousNotes
-          ? `${previousNotes}\nRETURN: ${returnNotes}`
+          ? `${previousNotes}\nDEVOLUCION: ${returnNotes}`
           : returnNotes
-            ? `RETURN: ${returnNotes}`
+            ? `DEVOLUCION: ${returnNotes}`
             : previousNotes;
 
       await tx.device.update({
@@ -324,24 +371,29 @@ export class DeviceAssignmentsService {
         data: {
           warehouseId: almacenIt.id,
           currentResponsibleName: null,
+          departmentId: null,
           status: 'AVAILABLE',
           updatedByUserId: actorUserId,
         },
       });
 
-      const returnedAssignment = await tx.deviceAssignment.update({
-        where: {
-          id: existingAssignment.id,
-        },
-        data: {
-          status: 'RETURNED',
-          returnedAt: returnDeviceAssignmentDto.returnedAt
-            ? new Date(returnDeviceAssignmentDto.returnedAt)
-            : new Date(),
-          deliveryNotes: mergedNotes,
-        },
-        include: deviceAssignmentDetailInclude,
-      });
+      const returnedAssignment =
+        await tx.deviceAssignment.update({
+          where: {
+            id: existingAssignment.id,
+          },
+          data: {
+            status: 'RETURNED',
+            returnedAt:
+              returnDeviceAssignmentDto.returnedAt
+                ? new Date(
+                    returnDeviceAssignmentDto.returnedAt,
+                  )
+                : new Date(),
+            deliveryNotes: mergedNotes,
+          },
+          include: deviceAssignmentDetailInclude,
+        });
 
       return {
         ok: true,

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecretsService } from '../security/secrets.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 
@@ -74,9 +75,14 @@ type DeviceAssignmentHistoryItem = Prisma.DeviceAssignmentGetPayload<{
 
 @Injectable()
 export class DevicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly secretsService: SecretsService,
+  ) {}
 
-  private async getNextDeviceCode(tx: PrismaService): Promise<string> {
+  private async getNextDeviceCode(
+    tx: Prisma.TransactionClient,
+  ): Promise<string> {
     const sequence = await tx.appSequence.findUnique({
       where: { code: 'DEVICE' },
     });
@@ -166,7 +172,9 @@ export class DevicesService {
     };
   }
 
-  private mapAssignmentHistoryItem(assignment: DeviceAssignmentHistoryItem) {
+  private mapAssignmentHistoryItem(
+    assignment: DeviceAssignmentHistoryItem,
+  ) {
     return {
       id: assignment.id,
       assignedToName: assignment.assignedToName,
@@ -219,12 +227,42 @@ export class DevicesService {
       const searchValue = search.trim();
 
       where.OR = [
-        { deviceCode: { contains: searchValue } },
-        { serialNumber: { contains: searchValue } },
-        { model: { contains: searchValue } },
-        { description: { contains: searchValue } },
-        { computerName: { contains: searchValue } },
-        { currentResponsibleName: { contains: searchValue } },
+        {
+          deviceCode: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
+        {
+          serialNumber: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
+        {
+          model: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
+        {
+          description: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
+        {
+          computerName: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
+        {
+          currentResponsibleName: {
+            contains: searchValue,
+            mode: 'insensitive',
+          },
+        },
       ];
     }
 
@@ -247,7 +285,7 @@ export class DevicesService {
     }
 
     if (status) {
-      where.status = status;
+      where.status = status.toUpperCase();
     }
 
     const devices = await this.prisma.device.findMany({
@@ -422,9 +460,7 @@ export class DevicesService {
         throw new ConflictException('El número de serie ya está registrado');
       }
 
-      const deviceCode = await this.getNextDeviceCode(
-        tx as unknown as PrismaService,
-      );
+      const deviceCode = await this.getNextDeviceCode(tx);
 
       const device = await tx.device.create({
         data: {
@@ -433,9 +469,8 @@ export class DevicesService {
           deviceTypeId: createDeviceDto.deviceTypeId,
           brandId: createDeviceDto.brandId,
           serialNumber: createDeviceDto.serialNumber,
-          currentResponsibleName: this.normalizeText(
-            createDeviceDto.currentResponsibleName,
-          ) ?? null,
+          currentResponsibleName:
+            this.normalizeText(createDeviceDto.currentResponsibleName) ?? null,
           departmentId: createDeviceDto.departmentId ?? null,
           simNumber: this.normalizeText(createDeviceDto.simNumber) ?? null,
           phoneNumber: this.normalizeText(createDeviceDto.phoneNumber) ?? null,
@@ -457,11 +492,19 @@ export class DevicesService {
           imei: this.normalizeText(createDeviceDto.imei) ?? null,
           iccid: this.normalizeText(createDeviceDto.iccid) ?? null,
           localPasswordEncrypted:
-            this.normalizeText(createDeviceDto.localPasswordEncrypted) ?? null,
+            createDeviceDto.localPasswordEncrypted !== undefined
+              ? this.secretsService.encrypt(
+                  createDeviceDto.localPasswordEncrypted,
+                )
+              : null,
           gmailAccount:
             this.normalizeText(createDeviceDto.gmailAccount) ?? null,
           gmailPasswordEncrypted:
-            this.normalizeText(createDeviceDto.gmailPasswordEncrypted) ?? null,
+            createDeviceDto.gmailPasswordEncrypted !== undefined
+              ? this.secretsService.encrypt(
+                  createDeviceDto.gmailPasswordEncrypted,
+                )
+              : null,
           computerName:
             this.normalizeText(createDeviceDto.computerName) ?? null,
           teamviewerId:
@@ -612,11 +655,15 @@ export class DevicesService {
       }
 
       if (updateDeviceDto.simNumber !== undefined) {
-        updateData.simNumber = this.normalizeText(updateDeviceDto.simNumber);
+        updateData.simNumber = this.normalizeText(
+          updateDeviceDto.simNumber,
+        );
       }
 
       if (updateDeviceDto.phoneNumber !== undefined) {
-        updateData.phoneNumber = this.normalizeText(updateDeviceDto.phoneNumber);
+        updateData.phoneNumber = this.normalizeText(
+          updateDeviceDto.phoneNumber,
+        );
       }
 
       if (updateDeviceDto.invoiceNumber !== undefined) {
@@ -630,11 +677,15 @@ export class DevicesService {
       }
 
       if (updateDeviceDto.description !== undefined) {
-        updateData.description = this.normalizeText(updateDeviceDto.description);
+        updateData.description = this.normalizeText(
+          updateDeviceDto.description,
+        );
       }
 
       if (updateDeviceDto.partNumber !== undefined) {
-        updateData.partNumber = this.normalizeText(updateDeviceDto.partNumber);
+        updateData.partNumber = this.normalizeText(
+          updateDeviceDto.partNumber,
+        );
       }
 
       if (updateDeviceDto.model !== undefined) {
@@ -674,7 +725,7 @@ export class DevicesService {
       }
 
       if (updateDeviceDto.localPasswordEncrypted !== undefined) {
-        updateData.localPasswordEncrypted = this.normalizeText(
+        updateData.localPasswordEncrypted = this.secretsService.encrypt(
           updateDeviceDto.localPasswordEncrypted,
         );
       }
@@ -686,7 +737,7 @@ export class DevicesService {
       }
 
       if (updateDeviceDto.gmailPasswordEncrypted !== undefined) {
-        updateData.gmailPasswordEncrypted = this.normalizeText(
+        updateData.gmailPasswordEncrypted = this.secretsService.encrypt(
           updateDeviceDto.gmailPasswordEncrypted,
         );
       }
