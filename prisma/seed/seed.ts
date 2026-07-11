@@ -127,7 +127,7 @@ async function seedUsersAndRoles() {
 
 function runSeed(file: string) {
   console.log(`\n>>> Ejecutando seed: ${file}`);
-  execSync(`pnpm exec tsx prisma/seed/${file}`, {
+  execSync(`corepack pnpm exec tsx prisma/seed/${file}`, {
     stdio: 'inherit',
     cwd: process.cwd(),
   });
